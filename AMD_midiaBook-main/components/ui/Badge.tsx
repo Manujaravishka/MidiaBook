@@ -2,14 +2,16 @@ import { View, Text, StyleSheet } from 'react-native'
 import { Colors, BorderRadius } from '../../constants/theme'
 
 interface BadgeProps {
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+  status: 'pending' | 'accepted' | 'confirmed' | 'completed' | 'cancelled' | 'rejected'
 }
 
-const config = {
+const config: Record<string, { bg: string; text: string; label: string }> = {
   pending: { bg: Colors.warningBg, text: Colors.warning, label: 'Pending' },
-  confirmed: { bg: Colors.primaryBg, text: Colors.primary, label: 'Confirmed' },
+  accepted: { bg: Colors.primaryBg, text: Colors.primary, label: 'Accepted' },
+  confirmed: { bg: Colors.primaryBg, text: Colors.primary, label: 'Accepted' },
   completed: { bg: Colors.successBg, text: Colors.success, label: 'Completed' },
-  cancelled: { bg: Colors.dangerBg, text: Colors.danger, label: 'Cancelled' },
+  cancelled: { bg: Colors.borderLight, text: Colors.textMuted, label: 'Cancelled' },
+  rejected: { bg: Colors.dangerBg, text: Colors.danger, label: 'Rejected' },
 }
 
 export default function Badge({ status }: BadgeProps) {

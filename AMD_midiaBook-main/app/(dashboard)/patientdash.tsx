@@ -135,7 +135,7 @@ export default function PatientDashboard() {
   }, [])
 
   const stats = useMemo(() => {
-    const upcoming = appointments.filter((a) => a.status === 'confirmed' || a.status === 'pending')
+    const upcoming = appointments.filter((a) => a.status === 'accepted' || a.status === 'confirmed' || a.status === 'pending')
     return {
       upcoming: upcoming.length,
       completed: appointments.filter((a) => a.status === 'completed').length,
@@ -270,7 +270,7 @@ export default function PatientDashboard() {
               </View>
               <View style={styles.apptFooter}>
                 <Badge status={a.status} />
-                {(a.status === 'pending' || a.status === 'confirmed') && (
+                {(a.status === 'pending' || a.status === 'accepted' || a.status === 'confirmed') && (
                   <TouchableOpacity onPress={() => handleCancelAppointment(a)} style={styles.cancelBtn}>
                     <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
                     <Text style={styles.cancelText}>Cancel</Text>

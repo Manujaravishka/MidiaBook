@@ -26,7 +26,7 @@ export default function DoctorDashboard() {
   const { user, logout } = useAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'today' | 'pending' | 'confirmed' | 'completed'>('all')
+  const [filter, setFilter] = useState<'all' | 'today' | 'pending' | 'accepted' | 'confirmed' | 'completed' | 'rejected'>('all')
   const [confirmAction, setConfirmAction] = useState<{ visible: boolean; title: string; message: string; onConfirm: () => void }>({
     visible: false, title: '', message: '', onConfirm: () => {},
   })
@@ -46,8 +46,8 @@ export default function DoctorDashboard() {
     router.replace('/(auth)/login')
   }, [logout, router])
 
-  const handleStatusChange = useCallback((appointmentId: string, newStatus: 'confirmed' | 'completed' | 'cancelled') => {
-    const labels: Record<string, string> = { confirmed: 'Accept', completed: 'Complete', cancelled: 'Reject' }
+  const handleStatusChange = useCallback((appointmentId: string, newStatus: 'accepted' | 'completed' | 'rejected') => {
+    const labels: Record<string, string> = { accepted: 'Accept', completed: 'Complete', rejected: 'Reject' }
     setConfirmAction({
       visible: true,
       title: `${labels[newStatus]} Appointment`,
@@ -69,8 +69,9 @@ export default function DoctorDashboard() {
     let list = appointments
     if (filter === 'today') list = list.filter((a) => a.appointmentDate === today)
     else if (filter === 'pending') list = list.filter((a) => a.status === 'pending')
-    else if (filter === 'confirmed') list = list.filter((a) => a.status === 'confirmed')
+    else if (filter === 'accepted' || filter === 'confirmed') list = list.filter((a) => a.status === 'accepted' || a.status === 'confirmed')
     else if (filter === 'completed') list = list.filter((a) => a.status === 'completed')
+    else if (filter === 'rejected') list = list.filter((a) => a.status === 'rejected')
     return list.sort((a, b) => {
       if (a.appointmentDate !== b.appointmentDate) return b.appointmentDate.localeCompare(a.appointmentDate)
       return (a.appointmentTime || '').localeCompare(b.appointmentTime || '')
@@ -82,7 +83,7 @@ export default function DoctorDashboard() {
     return {
       today: todayApps.length,
       pending: appointments.filter((a) => a.status === 'pending').length,
-      confirmed: appointments.filter((a) => a.status === 'confirmed').length,
+      confirmed: appointments.filter((a) => a.status === 'accepted' || a.status === 'confirmed').length,
       total: appointments.length,
     }
   }, [appointments, today])
@@ -91,12 +92,13 @@ export default function DoctorDashboard() {
     { key: 'all' as const, label: 'All', count: appointments.length },
     { key: 'today' as const, label: 'Today', count: stats.today },
     { key: 'pending' as const, label: 'Pending', count: stats.pending },
-    { key: 'confirmed' as const, label: 'Confirmed', count: stats.confirmed },
+    { key: 'accepted' as const, label: 'Accepted', count: stats.confirmed },
+    { key: 'rejected' as const, label: 'Rejected', count: appointments.filter((a) => a.status === 'rejected').length },
   ]
 
   const getStatusAction = (status: string) => {
-    if (status === 'pending') return { label: 'Accept', next: 'confirmed' as const, color: Colors.success }
-    if (status === 'confirmed') return { label: 'Complete', next: 'completed' as const, color: Colors.primary }
+    if (status === 'pending') return { label: 'Accept', next: 'accepted' as const, color: Colors.success }
+    if (status === 'accepted' || status === 'confirmed') return { label: 'Complete', next: 'completed' as const, color: Colors.primary }
     return null
   }
 
@@ -166,10 +168,10 @@ export default function DoctorDashboard() {
                           style={styles.smallBtn}
                         />
                       )}
-                      {(a.status === 'pending' || a.status === 'confirmed') && (
+                      {(a.status === 'pending' || a.status === 'accepted' || a.status === 'confirmed') && (
                         <Button
                           title="Reject"
-                          onPress={() => handleStatusChange(a.id, 'cancelled')}
+                          onPress={() => handleStatusChange(a.id, 'rejected')}
                           variant="danger"
                           fullWidth={false}
                           style={styles.smallBtn}
@@ -192,7 +194,7 @@ export default function DoctorDashboard() {
         message={confirmAction.message}
         onConfirm={confirmAction.onConfirm}
         onCancel={() => setConfirmAction((p) => ({ ...p, visible: false }))}
-        variant={confirmAction.title.includes('Reject') ? 'danger' : 'primary'}
+        variant={confirmAction.title.includes('Complete') ? 'primary' : 'danger'}
       />
     </Container>
   )

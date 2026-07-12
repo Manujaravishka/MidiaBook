@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'doctor' | 'patient'
 export type AccountStatus = 'active' | 'inactive' | 'deleted'
-export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled'
+export type AppointmentStatus = 'pending' | 'accepted' | 'confirmed' | 'completed' | 'cancelled' | 'rejected'
 
 export interface UserData {
   uid: string
@@ -53,9 +53,10 @@ export interface DashboardStats {
   totalPatients: number
   todayAppointments: number
   pendingAppointments: number
-  confirmedAppointments: number
+  acceptedAppointments: number
   completedAppointments: number
   cancelledAppointments: number
+  rejectedAppointments: number
 }
 
 export interface AuthContextType {

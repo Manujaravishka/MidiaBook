@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../context/AuthContext'
 import { subscribeDoctors, subscribeStats, subscribeRecentUsers, addDoctor, updateDoctor, toggleDoctorStatus } from '../../services/adminService'
-import { DoctorProfile, UserData, DashboardStats } from '../../types'
+import { subscribeAllAppointments, updateAppointmentStatus } from '../../services/appointmentService'
+import { DoctorProfile, UserData, DashboardStats, Appointment } from '../../types'
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme'
 import {
   Container,
@@ -13,6 +14,7 @@ import {
   Input,
   Button,
   Avatar,
+  Badge,
   StatCard,
   SearchBar,
   ConfirmDialog,
@@ -22,7 +24,7 @@ import {
   SkeletonCard,
 } from '../../components/ui'
 
-type ViewMode = 'dashboard' | 'doctors' | 'addDoctor' | 'editDoctor'
+type ViewMode = 'dashboard' | 'doctors' | 'addDoctor' | 'editDoctor' | 'appointments'
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -31,6 +33,9 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<DoctorProfile[]>([])
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentUsers, setRecentUsers] = useState<UserData[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [apptFilter, setApptFilter] = useState<'all' | 'pending' | 'accepted' | 'confirmed' | 'completed' | 'cancelled' | 'rejected'>('all')
+  const [apptSearch, setApptSearch] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ visible: boolean; title: string; message: string; onConfirm: () => void }>({
@@ -46,7 +51,8 @@ export default function AdminDashboard() {
   useEffect(() => {
     const unsubDocs = subscribeDoctors(setDoctors)
     const unsubStats = subscribeStats(setStats)
-    return () => { unsubDocs(); unsubStats() }
+    const unsubApps = subscribeAllAppointments(setAppointments)
+    return () => { unsubDocs(); unsubStats(); unsubApps() }
   }, [])
 
   const handleLogout = useCallback(async () => {
@@ -151,8 +157,9 @@ export default function AdminDashboard() {
       </View>
       <View style={styles.statsGrid}>
         <StatCard icon="time" label="Pending" value={stats?.pendingAppointments || 0} color={Colors.warning} bg={Colors.warningBg} />
-        <StatCard icon="checkmark-circle" label="Confirmed" value={stats?.confirmedAppointments || 0} color={Colors.primary} bg={Colors.primaryBg} />
+        <StatCard icon="checkmark-circle" label="Accepted" value={stats?.acceptedAppointments || 0} color={Colors.primary} bg={Colors.primaryBg} />
         <StatCard icon="checkmark-done" label="Completed" value={stats?.completedAppointments || 0} color={Colors.success} bg={Colors.successBg} />
+        <StatCard icon="close-circle" label="Rejected" value={stats?.rejectedAppointments || 0} color={Colors.danger} bg={Colors.dangerBg} />
       </View>
 
       <Card style={styles.quickActions}>
@@ -169,6 +176,12 @@ export default function AdminDashboard() {
               <Ionicons name="person-add" size={22} color={Colors.success} />
             </View>
             <Text style={styles.actionLabel}>Add Doctor</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setViewMode('appointments')}>
+            <View style={[styles.actionIcon, { backgroundColor: Colors.accentBg }]}>
+              <Ionicons name="calendar" size={22} color={Colors.accent} />
+            </View>
+            <Text style={styles.actionLabel}>Appointments</Text>
           </TouchableOpacity>
         </View>
       </Card>
@@ -248,6 +261,98 @@ export default function AdminDashboard() {
     </>
   )
 
+  const handleAdminCancelAppointment = useCallback((appointment: Appointment) => {
+    setConfirmAction({
+      visible: true,
+      title: 'Cancel Appointment',
+      message: `Cancel appointment for ${appointment.patientName} with Dr. ${appointment.doctorName}?`,
+      onConfirm: async () => {
+        try {
+          await updateAppointmentStatus(appointment.id, 'cancelled')
+          setConfirmAction((p) => ({ ...p, visible: false }))
+        } catch {
+          Alert.alert('Error', 'Failed to cancel appointment')
+        }
+      },
+    })
+  }, [])
+
+  const apptFilterChips = [
+    { key: 'all' as const, label: 'All' },
+    { key: 'pending' as const, label: 'Pending' },
+    { key: 'accepted' as const, label: 'Accepted' },
+    { key: 'completed' as const, label: 'Completed' },
+    { key: 'rejected' as const, label: 'Rejected' },
+    { key: 'cancelled' as const, label: 'Cancelled' },
+  ]
+
+  const filteredAppointments = useMemo(() => {
+    let list = appointments
+    if (apptFilter !== 'all') {
+      list = list.filter((a) => a.status === apptFilter || (apptFilter === 'accepted' && a.status === 'confirmed'))
+    }
+    if (apptSearch.trim()) {
+      const q = apptSearch.toLowerCase()
+      list = list.filter((a) => a.patientName?.toLowerCase().includes(q) || a.doctorName?.toLowerCase().includes(q) || a.hospital?.toLowerCase().includes(q))
+    }
+    return list
+  }, [appointments, apptFilter, apptSearch])
+
+  const renderAppointments = () => (
+    <>
+      <View style={styles.viewHeader}>
+        <TouchableOpacity onPress={() => { setViewMode('dashboard') }}>
+          <Text style={styles.backLink}>← Back to Dashboard</Text>
+        </TouchableOpacity>
+      </View>
+      <SearchBar value={apptSearch} onChangeText={setApptSearch} placeholder="Search by patient, doctor, hospital..." />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+        {apptFilterChips.map((f) => (
+          <TouchableOpacity
+            key={f.key}
+            style={[styles.filterChip, apptFilter === f.key && styles.filterChipActive]}
+            onPress={() => setApptFilter(f.key)}
+          >
+            <Text style={[styles.filterText, apptFilter === f.key && styles.filterTextActive]}>{f.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      <SectionHeader title={`Appointments (${filteredAppointments.length})`} />
+      {filteredAppointments.length === 0 ? (
+        <EmptyState icon="calendar-outline" title="No Appointments" message="No appointments match the current filter" />
+      ) : (
+        filteredAppointments.map((a) => (
+          <Card key={a.id} style={styles.apptCard}>
+            <View style={styles.apptRow}>
+              <Avatar name={a.patientName} size="md" />
+              <View style={styles.apptInfo}>
+                <Text style={styles.apptPatient}>{a.patientName}</Text>
+                <Text style={styles.apptDoctorName}>Dr. {a.doctorName} • {a.specialization}</Text>
+                <Text style={styles.apptMetaText}>{a.hospital}</Text>
+                <View style={styles.apptMetaRow}>
+                  <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
+                  <Text style={styles.apptMetaVal}>{a.appointmentDate}</Text>
+                  <Ionicons name="time-outline" size={13} color={Colors.textMuted} style={{ marginLeft: 8 }} />
+                  <Text style={styles.apptMetaVal}>{a.appointmentTime}</Text>
+                </View>
+                {a.reason ? <Text style={styles.apptReason}>Reason: {a.reason}</Text> : null}
+              </View>
+            </View>
+            <View style={styles.apptFooter}>
+              <Badge status={a.status === 'confirmed' ? 'accepted' : a.status} />
+              {(a.status === 'pending' || a.status === 'accepted' || a.status === 'confirmed') && (
+                <TouchableOpacity onPress={() => handleAdminCancelAppointment(a)} style={styles.cancelBtn}>
+                  <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Card>
+        ))
+      )}
+    </>
+  )
+
   return (
     <Container>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -263,6 +368,8 @@ export default function AdminDashboard() {
           renderDashboard()
         ) : viewMode === 'doctors' ? (
           renderDoctorList()
+        ) : viewMode === 'appointments' ? (
+          renderAppointments()
         ) : (
           renderDoctorForm()
         )}
@@ -305,4 +412,29 @@ const styles = StyleSheet.create({
   docActionText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
   formHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
   formActions: { gap: Spacing.sm, marginTop: Spacing.sm },
+  filterRow: { marginBottom: Spacing.md },
+  filterChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.backgroundAlt,
+    marginRight: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  filterText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  filterTextActive: { color: Colors.surface },
+  apptCard: { marginBottom: Spacing.sm },
+  apptRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  apptInfo: { flex: 1, marginLeft: Spacing.md },
+  apptPatient: { ...Typography.body, fontWeight: '700', color: Colors.text },
+  apptDoctorName: { fontSize: 13, color: Colors.primary, fontWeight: '500', marginTop: 2 },
+  apptMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 3 },
+  apptMetaText: { fontSize: 12, color: Colors.textSecondary },
+  apptMetaVal: { fontSize: 12, color: Colors.textSecondary },
+  apptReason: { fontSize: 13, color: Colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+  apptFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.md, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight },
+  cancelBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cancelText: { fontSize: 13, fontWeight: '600', color: Colors.danger },
 })

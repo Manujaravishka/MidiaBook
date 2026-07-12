@@ -98,9 +98,23 @@ export const subscribeStats = (
   callback: (stats: DashboardStats) => void
 ): (() => void) => {
   const today = new Date().toISOString().split('T')[0]
-  const todayStr = today
 
-  return onSnapshot(collection(db, 'users'), (snap: any) => {
+  let usersData = { totalDoctors: 0, totalPatients: 0 }
+  let appsData = {
+    todayAppointments: 0, pendingAppointments: 0,
+    acceptedAppointments: 0, completedAppointments: 0,
+    cancelledAppointments: 0, rejectedAppointments: 0,
+  }
+  let usersReady = false
+  let appsReady = false
+
+  const emit = () => {
+    if (usersReady && appsReady) {
+      callback({ ...usersData, ...appsData })
+    }
+  }
+
+  const unsubUsers = onSnapshot(collection(db, 'users'), (snap: any) => {
     let totalDoctors = 0
     let totalPatients = 0
     snap.forEach((d: any) => {
@@ -108,32 +122,41 @@ export const subscribeStats = (
       if (data.role === 'doctor' && data.accountStatus !== 'deleted') totalDoctors++
       if (data.role === 'patient') totalPatients++
     })
-
-    const unsubToday = onSnapshot(
-      query(collection(db, 'appointments'), where('appointmentDate', '==', todayStr)),
-      (snap2: any) => {
-        let todayAppointments = 0
-        snap2.forEach(() => todayAppointments++)
-
-        const unsubAll = onSnapshot(collection(db, 'appointments'), (snap3: any) => {
-          let pending = 0
-          let confirmed = 0
-          let completed = 0
-          let cancelled = 0
-          snap3.forEach((d: any) => {
-            const s = d.data().status
-            if (s === 'pending') pending++
-            else if (s === 'confirmed') confirmed++
-            else if (s === 'completed') completed++
-            else if (s === 'cancelled') cancelled++
-          })
-          callback({ totalDoctors, totalPatients, todayAppointments, pendingAppointments: pending, confirmedAppointments: confirmed, completedAppointments: completed, cancelledAppointments: cancelled })
-        })
-        return unsubAll
-      }
-    )
-    return unsubToday
+    usersData = { totalDoctors, totalPatients }
+    usersReady = true
+    emit()
   })
+
+  const unsubApps = onSnapshot(collection(db, 'appointments'), (snap: any) => {
+    let todayAppointments = 0
+    let pending = 0
+    let accepted = 0
+    let completed = 0
+    let cancelled = 0
+    let rejected = 0
+    snap.forEach((d: any) => {
+      const data = d.data()
+      const s = data.status
+      if (data.appointmentDate === today) todayAppointments++
+      if (s === 'pending') pending++
+      else if (s === 'accepted' || s === 'confirmed') accepted++
+      else if (s === 'completed') completed++
+      else if (s === 'cancelled') cancelled++
+      else if (s === 'rejected') rejected++
+    })
+    appsData = {
+      todayAppointments, pendingAppointments: pending,
+      acceptedAppointments: accepted, completedAppointments: completed,
+      cancelledAppointments: cancelled, rejectedAppointments: rejected,
+    }
+    appsReady = true
+    emit()
+  })
+
+  return () => {
+    unsubUsers()
+    unsubApps()
+  }
 }
 
 export const subscribeRecentUsers = (
