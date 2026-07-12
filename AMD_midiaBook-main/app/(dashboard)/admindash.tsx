@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { View, Text, ScrollView, Alert, StyleSheet, TouchableOpacity } from 'react-native'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { View, Text, ScrollView, Alert, StyleSheet, TouchableOpacity, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useAuth } from '../../context/AuthContext'
 import { subscribeDoctors, subscribeStats, subscribeRecentUsers, addDoctor, updateDoctor, toggleDoctorStatus } from '../../services/adminService'
 import { subscribeAllAppointments, updateAppointmentStatus } from '../../services/appointmentService'
 import { DoctorProfile, UserData, DashboardStats, Appointment } from '../../types'
-import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme'
+import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme'
 import {
   Container,
   Header,
@@ -47,6 +47,12 @@ export default function AdminDashboard() {
     specialization: '', hospital: '', experience: '', qualification: '',
   })
   const [submitting, setSubmitting] = useState(false)
+
+  const fadeAnim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start()
+  }, [fadeAnim])
 
   useEffect(() => {
     const unsubDocs = subscribeDoctors(setDoctors)
@@ -149,43 +155,44 @@ export default function AdminDashboard() {
   }, [doctors, searchQuery])
 
   const renderDashboard = () => (
-    <>
+    <Animated.View style={{ opacity: fadeAnim }}>
       <View style={styles.statsGrid}>
         <StatCard icon="people" label="Total Doctors" value={stats?.totalDoctors || 0} color={Colors.primary} bg={Colors.primaryBg} />
-        <StatCard icon="person-add" label="Total Patients" value={stats?.totalPatients || 0} color={Colors.secondary} bg={Colors.secondaryBg} />
-        <StatCard icon="calendar" label="Today" value={stats?.todayAppointments || 0} color={Colors.accent} bg={Colors.accentBg} />
+        <StatCard icon="person-add" label="Total Patients" value={stats?.totalPatients || 0} color={Colors.accent} bg={Colors.accentBg} />
+        <StatCard icon="calendar" label="Today" value={stats?.todayAppointments || 0} color={Colors.primary} bg={Colors.primaryBg} />
       </View>
       <View style={styles.statsGrid}>
         <StatCard icon="time" label="Pending" value={stats?.pendingAppointments || 0} color={Colors.warning} bg={Colors.warningBg} />
-        <StatCard icon="checkmark-circle" label="Accepted" value={stats?.acceptedAppointments || 0} color={Colors.primary} bg={Colors.primaryBg} />
-        <StatCard icon="checkmark-done" label="Completed" value={stats?.completedAppointments || 0} color={Colors.success} bg={Colors.successBg} />
+        <StatCard icon="checkmark-circle" label="Accepted" value={stats?.acceptedAppointments || 0} color={Colors.success} bg={Colors.successBg} />
+        <StatCard icon="checkmark-done" label="Completed" value={stats?.completedAppointments || 0} color={Colors.primary} bg={Colors.primaryBg} />
         <StatCard icon="close-circle" label="Rejected" value={stats?.rejectedAppointments || 0} color={Colors.danger} bg={Colors.dangerBg} />
       </View>
 
-      <Card style={styles.quickActions}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setViewMode('doctors')}>
-            <View style={[styles.actionIcon, { backgroundColor: Colors.primaryBg }]}>
-              <Ionicons name="people" size={22} color={Colors.primary} />
-            </View>
-            <Text style={styles.actionLabel}>Manage Doctors</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => { resetForm(); setViewMode('addDoctor') }}>
-            <View style={[styles.actionIcon, { backgroundColor: Colors.successBg }]}>
-              <Ionicons name="person-add" size={22} color={Colors.success} />
-            </View>
-            <Text style={styles.actionLabel}>Add Doctor</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setViewMode('appointments')}>
-            <View style={[styles.actionIcon, { backgroundColor: Colors.accentBg }]}>
-              <Ionicons name="calendar" size={22} color={Colors.accent} />
-            </View>
-            <Text style={styles.actionLabel}>Appointments</Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
-    </>
+      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <View style={styles.actionGrid}>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setViewMode('doctors')} activeOpacity={0.7}>
+          <View style={[styles.actionIconWrap, { backgroundColor: Colors.primaryBg }]}>
+            <Ionicons name="people" size={24} color={Colors.primary} />
+          </View>
+          <Text style={styles.actionCardLabel}>Manage Doctors</Text>
+          <Text style={styles.actionCardDesc}>{stats?.totalDoctors || 0} doctors</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={() => { resetForm(); setViewMode('addDoctor') }} activeOpacity={0.7}>
+          <View style={[styles.actionIconWrap, { backgroundColor: Colors.successBg }]}>
+            <Ionicons name="person-add" size={24} color={Colors.success} />
+          </View>
+          <Text style={styles.actionCardLabel}>Add Doctor</Text>
+          <Text style={styles.actionCardDesc}>Register new doctor</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionCard} onPress={() => setViewMode('appointments')} activeOpacity={0.7}>
+          <View style={[styles.actionIconWrap, { backgroundColor: Colors.primaryBg }]}>
+            <Ionicons name="calendar" size={24} color={Colors.primary} />
+          </View>
+          <Text style={styles.actionCardLabel}>Appointments</Text>
+          <Text style={styles.actionCardDesc}>View all bookings</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
   )
 
   const renderDoctorList = () => (
@@ -237,7 +244,9 @@ export default function AdminDashboard() {
       </View>
       <Card>
         <View style={styles.formHeader}>
-          <Ionicons name={editingDoctor ? 'create-outline' : 'person-add'} size={22} color={Colors.primary} />
+          <View style={[styles.formIconWrap, { backgroundColor: Colors.primaryBg }]}>
+            <Ionicons name={editingDoctor ? 'create-outline' : 'person-add'} size={22} color={Colors.primary} />
+          </View>
           <Text style={styles.sectionTitle}>{editingDoctor ? 'Edit Doctor' : 'Add New Doctor'}</Text>
         </View>
         <Input label="Full Name" icon="person-outline" value={form.fullName} onChangeText={(v) => setForm((p) => ({ ...p, fullName: v }))} placeholder="Dr. John Smith" />
@@ -312,6 +321,7 @@ export default function AdminDashboard() {
             key={f.key}
             style={[styles.filterChip, apptFilter === f.key && styles.filterChipActive]}
             onPress={() => setApptFilter(f.key)}
+            activeOpacity={0.7}
           >
             <Text style={[styles.filterText, apptFilter === f.key && styles.filterTextActive]}>{f.label}</Text>
           </TouchableOpacity>
@@ -323,30 +333,38 @@ export default function AdminDashboard() {
       ) : (
         filteredAppointments.map((a) => (
           <Card key={a.id} style={styles.apptCard}>
-            <View style={styles.apptRow}>
-              <Avatar name={a.patientName} size="md" />
-              <View style={styles.apptInfo}>
-                <Text style={styles.apptPatient}>{a.patientName}</Text>
-                <Text style={styles.apptDoctorName}>Dr. {a.doctorName} • {a.specialization}</Text>
-                <Text style={styles.apptMetaText}>{a.hospital}</Text>
-                <View style={styles.apptMetaRow}>
-                  <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
-                  <Text style={styles.apptMetaVal}>{a.appointmentDate}</Text>
-                  <Ionicons name="time-outline" size={13} color={Colors.textMuted} style={{ marginLeft: 8 }} />
-                  <Text style={styles.apptMetaVal}>{a.appointmentTime}</Text>
+            <View style={styles.apptHeader}>
+              <View style={styles.apptPersonRow}>
+                <Avatar name={a.patientName} size="md" />
+                <View style={styles.apptPersonInfo}>
+                  <Text style={styles.apptPersonName}>{a.patientName}</Text>
+                  <Text style={styles.apptPersonMeta}>Dr. {a.doctorName} • {a.specialization}</Text>
+                  <Text style={styles.apptPersonMeta}>{a.hospital}</Text>
                 </View>
-                {a.reason ? <Text style={styles.apptReason}>Reason: {a.reason}</Text> : null}
               </View>
-            </View>
-            <View style={styles.apptFooter}>
               <Badge status={a.status === 'confirmed' ? 'accepted' : a.status} />
-              {(a.status === 'pending' || a.status === 'accepted' || a.status === 'confirmed') && (
-                <TouchableOpacity onPress={() => handleAdminCancelAppointment(a)} style={styles.cancelBtn}>
-                  <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
             </View>
+            <View style={styles.apptDivider} />
+            <View style={styles.apptBody}>
+              <View style={styles.apptDetailRow}>
+                <Ionicons name="calendar-outline" size={15} color={Colors.primary} />
+                <Text style={styles.apptDetailText}>{a.appointmentDate}</Text>
+                <Ionicons name="time-outline" size={15} color={Colors.primary} style={{ marginLeft: 12 }} />
+                <Text style={styles.apptDetailText}>{a.appointmentTime}</Text>
+              </View>
+              {a.reason ? (
+                <View style={styles.apptDetailRow}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={15} color={Colors.textMuted} />
+                  <Text style={[styles.apptDetailText, { color: Colors.textMuted, fontStyle: 'italic' }]}>{a.reason}</Text>
+                </View>
+              ) : null}
+            </View>
+            {(a.status === 'pending' || a.status === 'accepted' || a.status === 'confirmed') && (
+              <TouchableOpacity onPress={() => handleAdminCancelAppointment(a)} style={styles.cancelRow}>
+                <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
+                <Text style={styles.cancelText}>Cancel Appointment</Text>
+              </TouchableOpacity>
+            )}
           </Card>
         ))
       )}
@@ -356,7 +374,11 @@ export default function AdminDashboard() {
   return (
     <Container>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Header title="Admin Panel" subtitle={user?.fullName} rightAction={{ icon: 'log-out-outline', onPress: handleLogout, color: Colors.danger }} />
+        <Header
+          title="Admin Panel"
+          subtitle={user?.fullName}
+          rightAction={{ icon: 'log-out-outline', onPress: handleLogout, color: Colors.danger }}
+        />
 
         {!stats && doctors.length === 0 ? (
           <>
@@ -392,12 +414,43 @@ export default function AdminDashboard() {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: Spacing.xxl },
   statsGrid: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
-  sectionTitle: { ...Typography.h4, color: Colors.text },
-  quickActions: { marginBottom: Spacing.lg },
-  actionRow: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.md },
-  actionBtn: { flex: 1, alignItems: 'center', gap: Spacing.sm },
-  actionIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  actionLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
+  sectionTitle: { ...Typography.h4, color: Colors.text, marginBottom: Spacing.md },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  actionCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    alignItems: 'center',
+    gap: Spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  actionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionCardLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  actionCardDesc: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
   viewHeader: { marginBottom: Spacing.md },
   backLink: { fontSize: 15, fontWeight: '600', color: Colors.primary },
   doctorCard: { marginBottom: Spacing.sm },
@@ -411,6 +464,13 @@ const styles = StyleSheet.create({
   docActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   docActionText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
   formHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
+  formIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   formActions: { gap: Spacing.sm, marginTop: Spacing.sm },
   filterRow: { marginBottom: Spacing.md },
   filterChip: {
@@ -425,16 +485,61 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   filterText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
   filterTextActive: { color: Colors.surface },
-  apptCard: { marginBottom: Spacing.sm },
-  apptRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  apptInfo: { flex: 1, marginLeft: Spacing.md },
-  apptPatient: { ...Typography.body, fontWeight: '700', color: Colors.text },
-  apptDoctorName: { fontSize: 13, color: Colors.primary, fontWeight: '500', marginTop: 2 },
-  apptMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 3 },
-  apptMetaText: { fontSize: 12, color: Colors.textSecondary },
-  apptMetaVal: { fontSize: 12, color: Colors.textSecondary },
-  apptReason: { fontSize: 13, color: Colors.textMuted, marginTop: 4, fontStyle: 'italic' },
-  apptFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.md, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight },
-  cancelBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cancelText: { fontSize: 13, fontWeight: '600', color: Colors.danger },
+  apptCard: { marginBottom: Spacing.md },
+  apptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  apptPersonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    flex: 1,
+  },
+  apptPersonInfo: {
+    flex: 1,
+  },
+  apptPersonName: {
+    ...Typography.body,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  apptPersonMeta: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  apptDivider: {
+    height: 1,
+    backgroundColor: Colors.borderLight,
+    marginVertical: Spacing.md,
+  },
+  apptBody: {
+    gap: Spacing.sm,
+  },
+  apptDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  apptDetailText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  cancelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  cancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.danger,
+  },
 })

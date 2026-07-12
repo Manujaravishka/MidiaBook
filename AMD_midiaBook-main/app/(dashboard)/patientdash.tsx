@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { View, Text, ScrollView, Alert, Platform, StyleSheet, TouchableOpacity } from 'react-native'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { View, Text, ScrollView, Alert, Platform, StyleSheet, TouchableOpacity, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext'
 import { subscribeActiveDoctors } from '../../services/doctorService'
 import { subscribePatientAppointments, bookAppointment, updateAppointmentStatus } from '../../services/appointmentService'
 import { DoctorProfile, Appointment } from '../../types'
-import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme'
+import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme'
 import {
   Container,
   Header,
@@ -20,8 +20,6 @@ import {
   SectionHeader,
   EmptyState,
   ConfirmDialog,
-  SkeletonCard,
-  SkeletonStatRow,
 } from '../../components/ui'
 
 const TIME_SLOTS = [
@@ -46,6 +44,16 @@ export default function PatientDashboard() {
   const [confirmAction, setConfirmAction] = useState<{ visible: boolean; title: string; message: string; onConfirm: () => void }>({
     visible: false, title: '', message: '', onConfirm: () => {},
   })
+
+  const headerFade = useRef(new Animated.Value(0)).current
+  const statsSlide = useRef(new Animated.Value(20)).current
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(headerFade, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(statsSlide, { toValue: 0, duration: 600, useNativeDriver: true }),
+    ]).start()
+  }, [headerFade, statsSlide])
 
   useEffect(() => {
     const unsubDocs = subscribeActiveDoctors(setDoctors)
@@ -152,25 +160,45 @@ export default function PatientDashboard() {
   return (
     <Container>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Header title={user.fullName || 'Patient'} subtitle="My Health Dashboard" rightAction={{ icon: 'log-out-outline', onPress: handleLogout, color: Colors.danger }} />
+        <Header
+          title={`Hi, ${user.fullName?.split(' ')[0] || 'Patient'}`}
+          subtitle="Patient Dashboard"
+          rightAction={{ icon: 'log-out-outline', onPress: handleLogout, color: Colors.danger }}
+        />
 
-        <View style={styles.statsGrid}>
-          <View style={[styles.statBox, { backgroundColor: Colors.primaryBg }]}>
-            <Text style={[styles.statNum, { color: Colors.primary }]}>{stats.upcoming}</Text>
-            <Text style={styles.statLabel}>Upcoming</Text>
+        <Animated.View style={{ opacity: headerFade, transform: [{ translateY: statsSlide }] }}>
+          <View style={styles.welcomeCard}>
+            <View style={styles.welcomeRow}>
+              <Avatar name={user.fullName} size="lg" />
+              <View style={styles.welcomeInfo}>
+                <Text style={styles.welcomeGreeting}>Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}</Text>
+                <Text style={styles.welcomeName}>{user.fullName}</Text>
+                <Text style={styles.welcomeRole}>Patient</Text>
+              </View>
+            </View>
           </View>
-          <View style={[styles.statBox, { backgroundColor: Colors.successBg }]}>
-            <Text style={[styles.statNum, { color: Colors.success }]}>{stats.completed}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
+
+          <View style={styles.statsRow}>
+            <View style={[styles.statItem, { backgroundColor: Colors.primaryBg }]}>
+              <Ionicons name="calendar" size={22} color={Colors.primary} />
+              <Text style={[styles.statNum, { color: Colors.primary }]}>{stats.upcoming}</Text>
+              <Text style={styles.statLabel}>Upcoming</Text>
+            </View>
+            <View style={[styles.statItem, { backgroundColor: Colors.successBg }]}>
+              <Ionicons name="checkmark-done" size={22} color={Colors.success} />
+              <Text style={[styles.statNum, { color: Colors.success }]}>{stats.completed}</Text>
+              <Text style={styles.statLabel}>Completed</Text>
+            </View>
+            <View style={[styles.statItem, { backgroundColor: Colors.backgroundAlt }]}>
+              <Ionicons name="documents" size={22} color={Colors.textSecondary} />
+              <Text style={[styles.statNum, { color: Colors.text }]}>{stats.total}</Text>
+              <Text style={styles.statLabel}>Total</Text>
+            </View>
           </View>
-          <View style={[styles.statBox, { backgroundColor: Colors.accentBg }]}>
-            <Text style={[styles.statNum, { color: Colors.accent }]}>{stats.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-        </View>
+        </Animated.View>
 
         <Card style={styles.bookCard}>
-          <TouchableOpacity style={styles.bookBtnLarge} onPress={() => setShowBooking(!showBooking)}>
+          <TouchableOpacity style={styles.bookBtnLarge} onPress={() => setShowBooking(!showBooking)} activeOpacity={0.7}>
             <View style={styles.bookBtnContent}>
               <View style={[styles.bookIcon, { backgroundColor: Colors.primaryBg }]}>
                 <Ionicons name="calendar" size={24} color={Colors.primary} />
@@ -197,6 +225,7 @@ export default function PatientDashboard() {
                       key={d.uid}
                       style={[styles.doctorItem, selectedDoctor?.uid === d.uid && styles.doctorItemSelected]}
                       onPress={() => setSelectedDoctor(d)}
+                      activeOpacity={0.7}
                     >
                       <Avatar name={d.fullName} size="md" />
                       <View style={styles.doctorItemInfo}>
@@ -220,7 +249,7 @@ export default function PatientDashboard() {
                       <input type="date" value={formatDate(date)} onChange={(e) => setDate(new Date(e.target.value))} style={styles.webDateInput} />
                     </View>
                   ) : (
-                    <TouchableOpacity style={styles.selector} onPress={() => setShowDatePicker(true)}>
+                    <TouchableOpacity style={styles.selector} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
                       <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
                       <Text style={styles.selectorText}>{date.toDateString()}</Text>
                     </TouchableOpacity>
@@ -232,7 +261,7 @@ export default function PatientDashboard() {
                   <Text style={styles.fieldLabel}>Time</Text>
                   <View style={styles.timeGrid}>
                     {TIME_SLOTS.map((slot) => (
-                      <TouchableOpacity key={slot} style={[styles.timeSlot, selectedTime === slot && styles.timeSlotActive]} onPress={() => setSelectedTime(slot)}>
+                      <TouchableOpacity key={slot} style={[styles.timeSlot, selectedTime === slot && styles.timeSlotActive]} onPress={() => setSelectedTime(slot)} activeOpacity={0.7}>
                         <Text style={[styles.timeSlotText, selectedTime === slot && styles.timeSlotTextActive]}>{slot}</Text>
                       </TouchableOpacity>
                     ))}
@@ -252,31 +281,45 @@ export default function PatientDashboard() {
         {sortedAppointments.length === 0 ? (
           <EmptyState icon="calendar-outline" title="No Appointments" message="Book your first appointment above" actionLabel="Book Now" onAction={() => setShowBooking(true)} />
         ) : (
-          sortedAppointments.map((a) => (
+          sortedAppointments.map((a, index) => (
             <Card key={a.id} style={styles.apptCard}>
-              <View style={styles.apptRow}>
-                <Avatar name={a.doctorName} size="md" />
-                <View style={styles.apptInfo}>
-                  <Text style={styles.apptDoctor}>Dr. {a.doctorName}</Text>
-                  <Text style={styles.apptSpec}>{a.specialization} • {a.hospital}</Text>
-                  <View style={styles.apptMeta}>
-                    <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
-                    <Text style={styles.apptMetaText}>{a.appointmentDate}</Text>
-                    <Ionicons name="time-outline" size={13} color={Colors.textMuted} style={{ marginLeft: 8 }} />
-                    <Text style={styles.apptMetaText}>{a.appointmentTime}</Text>
+              <View style={styles.apptHeader}>
+                <View style={styles.apptDocRow}>
+                  <Avatar name={a.doctorName} size="md" />
+                  <View style={styles.apptDocInfo}>
+                    <Text style={styles.apptDoctor}>Dr. {a.doctorName}</Text>
+                    <Text style={styles.apptSpec}>{a.specialization}</Text>
                   </View>
-                  {a.reason ? <Text style={styles.apptReason}>Reason: {a.reason}</Text> : null}
                 </View>
+                <Badge status={a.status === 'confirmed' ? 'accepted' : a.status} />
               </View>
-              <View style={styles.apptFooter}>
-                <Badge status={a.status} />
-                {(a.status === 'pending' || a.status === 'accepted' || a.status === 'confirmed') && (
-                  <TouchableOpacity onPress={() => handleCancelAppointment(a)} style={styles.cancelBtn}>
-                    <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                )}
+              <View style={styles.apptDivider} />
+              <View style={styles.apptBody}>
+                <View style={styles.apptDetailRow}>
+                  <Ionicons name="medical-outline" size={15} color={Colors.primary} />
+                  <Text style={styles.apptDetailText}>{a.hospital}</Text>
+                </View>
+                <View style={styles.apptDetailRow}>
+                  <Ionicons name="calendar-outline" size={15} color={Colors.primary} />
+                  <Text style={styles.apptDetailText}>{a.appointmentDate}</Text>
+                </View>
+                <View style={styles.apptDetailRow}>
+                  <Ionicons name="time-outline" size={15} color={Colors.primary} />
+                  <Text style={styles.apptDetailText}>{a.appointmentTime}</Text>
+                </View>
+                {a.reason ? (
+                  <View style={styles.apptDetailRow}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={15} color={Colors.textMuted} />
+                    <Text style={[styles.apptDetailText, styles.apptReason]}>{a.reason}</Text>
+                  </View>
+                ) : null}
               </View>
+              {(a.status === 'pending' || a.status === 'accepted' || a.status === 'confirmed') && (
+                <TouchableOpacity onPress={() => handleCancelAppointment(a)} style={styles.cancelRow}>
+                  <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
+                  <Text style={styles.cancelText}>Cancel Appointment</Text>
+                </TouchableOpacity>
+              )}
             </Card>
           ))
         )}
@@ -298,21 +341,116 @@ export default function PatientDashboard() {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: Spacing.xxl },
-  statsGrid: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-  statBox: { flex: 1, borderRadius: BorderRadius.lg, padding: Spacing.md, alignItems: 'center' },
-  statNum: { fontSize: 24, fontWeight: '800' },
-  statLabel: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, marginTop: 2 },
-  bookCard: { marginBottom: Spacing.lg },
-  bookBtnLarge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bookBtnContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  bookIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  bookTitle: { ...Typography.h4, color: Colors.text },
-  bookSubtitle: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
-  bookingForm: { marginTop: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: Spacing.md },
-  fieldLabel: { ...Typography.label, color: Colors.textSecondary, marginBottom: Spacing.sm, marginTop: Spacing.md },
+  welcomeCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  welcomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  welcomeInfo: {
+    flex: 1,
+  },
+  welcomeGreeting: {
+    ...Typography.caption,
+    color: Colors.primary,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  welcomeName: {
+    ...Typography.h3,
+    color: Colors.text,
+    marginTop: 2,
+  },
+  welcomeRole: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  statItem: {
+    flex: 1,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statNum: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  bookCard: {
+    marginBottom: Spacing.lg,
+  },
+  bookBtnLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bookBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  bookIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookTitle: {
+    ...Typography.h4,
+    color: Colors.text,
+  },
+  bookSubtitle: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  bookingForm: {
+    marginTop: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    paddingTop: Spacing.md,
+  },
+  fieldLabel: {
+    ...Typography.label,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.md,
+  },
   doctorList: { maxHeight: 300 },
   noData: { textAlign: 'center', color: Colors.textMuted, padding: Spacing.lg },
-  doctorItem: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: BorderRadius.lg, marginBottom: Spacing.xs, backgroundColor: Colors.backgroundAlt, borderWidth: 1, borderColor: Colors.borderLight },
+  doctorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.xs,
+    backgroundColor: Colors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
   doctorItemSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
   doctorItemInfo: { flex: 1, marginLeft: Spacing.md },
   doctorItemName: { ...Typography.body, fontWeight: '600', color: Colors.text },
@@ -329,15 +467,67 @@ const styles = StyleSheet.create({
   timeSlotActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   timeSlotText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
   timeSlotTextActive: { color: Colors.surface },
-  apptCard: { marginBottom: Spacing.sm },
-  apptRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  apptInfo: { flex: 1, marginLeft: Spacing.md },
-  apptDoctor: { ...Typography.body, fontWeight: '700', color: Colors.text },
-  apptSpec: { fontSize: 13, color: Colors.primary, fontWeight: '500', marginTop: 2 },
-  apptMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 3 },
-  apptMetaText: { fontSize: 12, color: Colors.textSecondary },
-  apptReason: { fontSize: 13, color: Colors.textMuted, marginTop: 4, fontStyle: 'italic' },
-  apptFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.md, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight },
-  cancelBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cancelText: { fontSize: 13, fontWeight: '600', color: Colors.danger },
+  apptCard: { marginBottom: Spacing.md },
+  apptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  apptDocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    flex: 1,
+  },
+  apptDocInfo: {
+    flex: 1,
+  },
+  apptDoctor: {
+    ...Typography.body,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  apptSpec: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  apptDivider: {
+    height: 1,
+    backgroundColor: Colors.borderLight,
+    marginVertical: Spacing.md,
+  },
+  apptBody: {
+    gap: Spacing.sm,
+  },
+  apptDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  apptDetailText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  apptReason: {
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  cancelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  cancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.danger,
+  },
 })

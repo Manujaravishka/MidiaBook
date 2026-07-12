@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Colors, Spacing, Typography } from '../../constants/theme'
 
 interface SectionHeaderProps {
@@ -19,9 +19,9 @@ export default function SectionHeader({ title, count, action }: SectionHeaderPro
         )}
       </View>
       {action && (
-        <Text style={styles.action} onPress={action.onPress}>
-          {action.label}
-        </Text>
+        <TouchableOpacity onPress={action.onPress}>
+          <Text style={styles.action}>{action.label}</Text>
+        </TouchableOpacity>
       )}
     </View>
   )
@@ -41,6 +41,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.h4,
+    color: Colors.text,
   },
   countBadge: {
     backgroundColor: Colors.primaryBg,

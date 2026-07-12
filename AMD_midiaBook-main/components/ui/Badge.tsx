@@ -1,17 +1,17 @@
 import { View, Text, StyleSheet } from 'react-native'
-import { Colors, BorderRadius } from '../../constants/theme'
+import { BorderRadius } from '../../constants/theme'
 
 interface BadgeProps {
   status: 'pending' | 'accepted' | 'confirmed' | 'completed' | 'cancelled' | 'rejected'
 }
 
 const config: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: Colors.warningBg, text: Colors.warning, label: 'Pending' },
-  accepted: { bg: Colors.primaryBg, text: Colors.primary, label: 'Accepted' },
-  confirmed: { bg: Colors.primaryBg, text: Colors.primary, label: 'Accepted' },
-  completed: { bg: Colors.successBg, text: Colors.success, label: 'Completed' },
-  cancelled: { bg: Colors.borderLight, text: Colors.textMuted, label: 'Cancelled' },
-  rejected: { bg: Colors.dangerBg, text: Colors.danger, label: 'Rejected' },
+  pending: { bg: '#FEF3C7', text: '#D97706', label: 'Pending' },
+  accepted: { bg: '#DCFCE7', text: '#16A34A', label: 'Accepted' },
+  confirmed: { bg: '#DCFCE7', text: '#16A34A', label: 'Accepted' },
+  completed: { bg: '#DBEAFE', text: '#2563EB', label: 'Completed' },
+  cancelled: { bg: '#F1F5F9', text: '#64748B', label: 'Cancelled' },
+  rejected: { bg: '#FEE2E2', text: '#DC2626', label: 'Rejected' },
 }
 
 export default function Badge({ status }: BadgeProps) {

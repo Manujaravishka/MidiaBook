@@ -29,7 +29,7 @@ export default function Header({ title, subtitle, onBack, rightAction }: HeaderP
       </View>
       {rightAction && (
         <TouchableOpacity onPress={rightAction.onPress} style={styles.actionButton}>
-          <Ionicons name={rightAction.icon} size={22} color={rightAction.color || Colors.text} />
+          <Ionicons name={rightAction.icon} size={22} color={rightAction.color || Colors.primary} />
         </TouchableOpacity>
       )}
     </View>
@@ -58,17 +58,20 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.h2,
+    color: Colors.text,
   },
   subtitle: {
     ...Typography.caption,
+    color: Colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 1,
+    fontWeight: '700',
   },
   actionButton: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: Colors.dangerBg,
+    backgroundColor: Colors.primaryBg,
     alignItems: 'center',
     justifyContent: 'center',
   },

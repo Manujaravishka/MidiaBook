@@ -1,5 +1,5 @@
-import CoverPage from "./(dashboard)/CoverPage";
+import SplashScreen from '../components/ui/SplashScreen'
 
 export default function Index() {
-   return <CoverPage />
+  return <SplashScreen />
 }

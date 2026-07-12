@@ -102,6 +102,7 @@ const styles = StyleSheet.create({
   },
   focused: {
     borderColor: Colors.primary,
+    borderWidth: 2,
   },
   errorBorder: {
     borderColor: Colors.danger,

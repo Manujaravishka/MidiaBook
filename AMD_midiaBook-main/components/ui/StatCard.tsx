@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme'
+import { Colors, Spacing, BorderRadius } from '../../constants/theme'
 
 interface StatCardProps {
   icon: keyof typeof Ionicons.glyphMap

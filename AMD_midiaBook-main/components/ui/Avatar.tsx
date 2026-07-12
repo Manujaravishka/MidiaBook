@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native'
-import { Colors, BorderRadius } from '../../constants/theme'
+import { Colors } from '../../constants/theme'
 
 type AvatarSize = 'sm' | 'md' | 'lg' | 'xl'
 
@@ -41,8 +41,8 @@ export default function Avatar({ name, size = 'md', color }: AvatarProps) {
 
 function getColorFromName(name: string): string {
   const colors = [
-    '#6366F1', '#14B8A6', '#F59E0B', '#EF4444',
-    '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
+    '#16A34A', '#0F172A', '#14B8A6', '#2563EB',
+    '#7C3AED', '#DC2626', '#D97706', '#0891B2',
   ]
   let hash = 0
   for (let i = 0; i < name.length; i++) {

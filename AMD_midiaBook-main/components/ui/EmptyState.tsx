@@ -45,10 +45,12 @@ const styles = StyleSheet.create({
     ...Typography.h4,
     textAlign: 'center',
     marginBottom: Spacing.sm,
+    color: Colors.text,
   },
   message: {
     ...Typography.bodySmall,
     textAlign: 'center',
+    color: Colors.textSecondary,
     marginBottom: Spacing.lg,
   },
   button: {
