@@ -62,7 +62,7 @@ export default function Login() {
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
-              Sign in to continue to your health dashboard
+              Sign in to access your health dashboard
             </Text>
           </View>
 

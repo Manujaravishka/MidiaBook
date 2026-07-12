@@ -1,47 +1,48 @@
-import React, { createContext, useEffect, useState, useContext, useCallback } from 'react'
+import React, { createContext, useEffect, useState, useContext, useCallback, useRef } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth, db } from '../services/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { router } from 'expo-router'
-
-export interface UserData {
-  uid: string
-  email: string
-  fullName: string
-  role: 'admin' | 'doctor' | 'patient'
-  speciality?: string
-  age?: number
-}
-
-interface AuthContextType {
-  user: UserData | null
-  loading: boolean
-  logout: () => Promise<void>
-}
+import { UserData, AuthContextType } from '../types'
+import { checkAndCreateAdmin } from '../services/adminService'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)
+  const adminCheckDone = useRef(false)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
+    let mounted = true
+
+    const setup = async () => {
+      if (!adminCheckDone.current) {
+        adminCheckDone.current = true
+        try {
+          await checkAndCreateAdmin()
+        } catch {
+          // silent
+        }
+      }
+    }
+    setup()
+
+    const unsub = onAuthStateChanged(auth, async (firebaseUser: any) => {
+      if (firebaseUser && mounted) {
         try {
           const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
           if (snap.exists()) {
             const data = snap.data()
-            setUser({
-              uid: firebaseUser.uid,
-              email: data.email || '',
-              fullName: data.fullName || '',
-              role: data.role || 'patient',
-              speciality: data.speciality,
-              age: data.age,
-            })
+            if (data.accountStatus === 'deleted' || data.accountStatus === 'inactive') {
+              setUser(null)
+              await signOut(auth)
+            } else {
+              setUser({ uid: firebaseUser.uid, ...data } as UserData)
+            }
           } else {
             setUser(null)
+            await signOut(auth)
           }
         } catch {
           setUser(null)
@@ -49,16 +50,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         setUser(null)
       }
-      setLoading(false)
+      if (mounted) setLoading(false)
     })
-    return () => unsub()
+
+    return () => {
+      mounted = false
+      unsub()
+    }
   }, [])
 
   const logout = useCallback(async () => {
     try {
       await signOut(auth)
       setUser(null)
-      router.replace('/login')
+      router.replace('/(auth)/login')
     } catch (err) {
       console.error('Logout failed:', err)
     }

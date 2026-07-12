@@ -26,11 +26,11 @@ export default function Input({
   isPassword,
   value,
   onChangeText,
+  style,
   ...props
 }: InputProps) {
   const [focused, setFocused] = useState(false)
   const [secure, setSecure] = useState(isPassword)
-  const hasValue = value && value.length > 0
 
   return (
     <View style={styles.wrapper}>
@@ -40,6 +40,7 @@ export default function Input({
           styles.container,
           focused && styles.focused,
           error && styles.errorBorder,
+          props.multiline && styles.multiline,
         ]}
       >
         {icon && (
@@ -47,11 +48,11 @@ export default function Input({
             name={icon}
             size={20}
             color={error ? Colors.danger : focused ? Colors.primary : Colors.textMuted}
-            style={styles.icon}
+            style={[styles.icon, props.multiline && { marginTop: 2 }]}
           />
         )}
         <TextInput
-          style={styles.input}
+          style={[styles.input, props.multiline && styles.multilineInput, style as any]}
           value={value}
           onChangeText={onChangeText}
           onFocus={() => setFocused(true)}
@@ -68,9 +69,6 @@ export default function Input({
               color={Colors.textMuted}
             />
           </TouchableOpacity>
-        )}
-        {hasValue && !isPassword && (
-          <Ionicons name="checkmark-circle" size={18} color={error ? Colors.danger : Colors.success} />
         )}
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
@@ -96,7 +94,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing.md,
-    height: 52,
+    minHeight: 52,
+  },
+  multiline: {
+    alignItems: 'flex-start',
+    paddingVertical: Spacing.sm,
   },
   focused: {
     borderColor: Colors.primary,
@@ -111,7 +113,12 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.text,
-    height: '100%',
+    height: 52,
+  },
+  multilineInput: {
+    height: 80,
+    textAlignVertical: 'top',
+    paddingTop: Spacing.sm,
   },
   toggle: {
     padding: Spacing.xs,

@@ -4,14 +4,8 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth"
-import { doc, setDoc, getDoc } from "firebase/firestore"
-
-export type UserData = {
-  uid: string
-  email: string
-  fullName: string
-  role: string
-};
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import { UserData } from "../types"
 
 export const registerPatient = async (
   email: string,
@@ -22,27 +16,28 @@ export const registerPatient = async (
 
   await setDoc(doc(db, "users", cred.user.uid), {
     uid: cred.user.uid,
-    email,
     fullName,
+    email,
+    phone: "",
+    gender: "",
     role: "patient",
-    createdAt: new Date(),
+    accountStatus: "active",
+    profileImage: "",
+    createdAt: serverTimestamp(),
   })
 
   return cred
 }
 
 export const loginUser = async (email: string, password: string): Promise<UserData> => {
-
-  console.log(email," ",password)
-
   const cred = await signInWithEmailAndPassword(auth, email, password)
 
-
   const snap = await getDoc(doc(db, "users", cred.user.uid))
-  if (!snap.exists()) throw new Error("User not found")
+  if (!snap.exists()) throw new Error("User profile not found")
+  if (snap.data().accountStatus === "inactive") throw new Error("Account is deactivated")
+  if (snap.data().accountStatus === "deleted") throw new Error("Account not found")
 
-  const data = snap.data() as Omit<UserData, "uid">
-  return { uid: cred.user.uid, ...data }
-};
+  return { uid: cred.user.uid, ...snap.data() } as UserData
+}
 
 export const logoutUser = () => signOut(auth)

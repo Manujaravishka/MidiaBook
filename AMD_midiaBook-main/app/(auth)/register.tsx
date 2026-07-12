@@ -70,7 +70,7 @@ export default function Register() {
             </View>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>
-              Join MediBook to start managing your health
+              Join to start managing your health
             </Text>
           </View>
 

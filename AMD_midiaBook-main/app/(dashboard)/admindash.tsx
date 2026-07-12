@@ -1,18 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
-import {
-  View,
-  Text,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  StyleSheet,
-} from 'react-native'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { View, Text, ScrollView, Alert, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { db, auth } from '../../services/firebase'
-import { collection, getDocs, addDoc } from 'firebase/firestore'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { useAuth } from '../../context/AuthContext'
 import { useRouter } from 'expo-router'
+import { useAuth } from '../../context/AuthContext'
+import { subscribeDoctors, subscribeStats, subscribeRecentUsers, addDoctor, updateDoctor, toggleDoctorStatus } from '../../services/adminService'
+import { DoctorProfile, UserData, DashboardStats } from '../../types'
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/theme'
 import {
   Container,
@@ -20,89 +12,42 @@ import {
   Card,
   Input,
   Button,
-  SectionHeader,
   Avatar,
+  StatCard,
+  SearchBar,
+  ConfirmDialog,
+  SectionHeader,
   EmptyState,
-  LoadingScreen,
+  SkeletonStatRow,
+  SkeletonCard,
 } from '../../components/ui'
 
-type Doctor = {
-  id: string
-  fullName: string
-  speciality: string
-  age: number
-  email: string
-  role: string
-}
+type ViewMode = 'dashboard' | 'doctors' | 'addDoctor' | 'editDoctor'
 
 export default function AdminDashboard() {
   const router = useRouter()
   const { user, logout } = useAuth()
-  const [doctors, setDoctors] = useState<Doctor[]>([])
-  const [loading, setLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
+  const [doctors, setDoctors] = useState<DoctorProfile[]>([])
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [recentUsers, setRecentUsers] = useState<UserData[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [editingDoctor, setEditingDoctor] = useState<DoctorProfile | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ visible: boolean; title: string; message: string; onConfirm: () => void }>({
+    visible: false, title: '', message: '', onConfirm: () => {},
+  })
 
-  const [fullName, setFullName] = useState('')
-  const [speciality, setSpeciality] = useState('')
-  const [age, setAge] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({
+    fullName: '', email: '', password: '', phone: '', gender: '',
+    specialization: '', hospital: '', experience: '', qualification: '',
+  })
+  const [submitting, setSubmitting] = useState(false)
 
-  const fetchDoctors = useCallback(async () => {
-    setLoading(true)
-    try {
-      const snap = await getDocs(collection(db, 'users'))
-      const docs: Doctor[] = []
-      snap.forEach((d: any) => {
-        const data = d.data()
-        if (data.role === 'doctor') {
-          docs.push({ id: d.id, ...data } as Doctor)
-        }
-      })
-      setDoctors(docs)
-    } catch {
-      Alert.alert('Error', 'Failed to load doctors.')
-    } finally {
-      setLoading(false)
-    }
+  useEffect(() => {
+    const unsubDocs = subscribeDoctors(setDoctors)
+    const unsubStats = subscribeStats(setStats)
+    return () => { unsubDocs(); unsubStats() }
   }, [])
-
-  useEffect(() => { fetchDoctors() }, [fetchDoctors])
-
-  const handleAddDoctor = useCallback(async () => {
-    if (!fullName || !speciality || !age || !email || !password) {
-      return Alert.alert('Missing Fields', 'Please fill all doctor details.')
-    }
-    setAdding(true)
-    try {
-      const userCred = await createUserWithEmailAndPassword(auth, email, password)
-      await addDoc(collection(db, 'users'), {
-        fullName,
-        speciality,
-        age: Number(age),
-        email,
-        role: 'doctor',
-        uid: userCred.user.uid,
-      })
-      Alert.alert('Success', 'Doctor added successfully!')
-      setFullName('')
-      setSpeciality('')
-      setAge('')
-      setEmail('')
-      setPassword('')
-      setShowForm(false)
-      fetchDoctors()
-    } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        Alert.alert('Error', 'This email is already registered.')
-      } else {
-        Alert.alert('Error', err.message || 'Failed to add doctor.')
-      }
-    } finally {
-      setAdding(false)
-    }
-  }, [fullName, speciality, age, email, password, fetchDoctors])
 
   const handleLogout = useCallback(async () => {
     await logout()
@@ -110,263 +55,254 @@ export default function AdminDashboard() {
   }, [logout, router])
 
   const resetForm = useCallback(() => {
-    setFullName('')
-    setSpeciality('')
-    setAge('')
-    setEmail('')
-    setPassword('')
-    setShowForm(false)
+    setForm({ fullName: '', email: '', password: '', phone: '', gender: '', specialization: '', hospital: '', experience: '', qualification: '' })
+    setEditingDoctor(null)
   }, [])
+
+  const openEditDoctor = useCallback((doctor: DoctorProfile) => {
+    setForm({
+      fullName: doctor.fullName,
+      email: doctor.email,
+      password: '',
+      phone: doctor.phone || '',
+      gender: doctor.gender || '',
+      specialization: doctor.specialization || '',
+      hospital: doctor.hospital || '',
+      experience: String(doctor.experience || ''),
+      qualification: doctor.qualification || '',
+    })
+    setEditingDoctor(doctor)
+    setViewMode('editDoctor')
+  }, [])
+
+  const handleSubmitDoctor = useCallback(async () => {
+    if (!form.fullName || !form.specialization) {
+      return Alert.alert('Missing Fields', 'Name and specialization are required')
+    }
+    if (!editingDoctor && (!form.email || !form.password)) {
+      return Alert.alert('Missing Fields', 'Email and password are required for new doctors')
+    }
+
+    setSubmitting(true)
+    try {
+      if (editingDoctor) {
+        await updateDoctor(editingDoctor.uid, {
+          fullName: form.fullName,
+          phone: form.phone,
+          gender: form.gender,
+          specialization: form.specialization,
+          hospital: form.hospital,
+          experience: Number(form.experience),
+          qualification: form.qualification,
+        })
+        Alert.alert('Success', 'Doctor updated successfully')
+      } else {
+        await addDoctor(
+          form.fullName, form.email, form.password, form.phone,
+          form.gender, form.specialization, form.hospital,
+          form.experience, form.qualification
+        )
+        Alert.alert('Success', 'Doctor added successfully')
+      }
+      resetForm()
+      setViewMode('doctors')
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Operation failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [form, editingDoctor, resetForm])
+
+  const handleToggleStatus = useCallback((doctor: DoctorProfile) => {
+    const newStatus = doctor.accountStatus === 'active' ? 'deactivate' : 'activate'
+    setConfirmAction({
+      visible: true,
+      title: `${newStatus === 'deactivate' ? 'Deactivate' : 'Activate'} Doctor`,
+      message: `Are you sure you want to ${newStatus} Dr. ${doctor.fullName}?`,
+      onConfirm: async () => {
+        try {
+          await toggleDoctorStatus(doctor.uid, doctor.accountStatus)
+          setConfirmAction((p) => ({ ...p, visible: false }))
+        } catch {
+          Alert.alert('Error', 'Failed to update status')
+        }
+      },
+    })
+  }, [])
+
+  const filteredDoctors = useMemo(() => {
+    if (!searchQuery.trim()) return doctors
+    const q = searchQuery.toLowerCase()
+    return doctors.filter(
+      (d) =>
+        d.fullName.toLowerCase().includes(q) ||
+        d.specialization?.toLowerCase().includes(q) ||
+        d.hospital?.toLowerCase().includes(q) ||
+        d.email?.toLowerCase().includes(q)
+    )
+  }, [doctors, searchQuery])
+
+  const renderDashboard = () => (
+    <>
+      <View style={styles.statsGrid}>
+        <StatCard icon="people" label="Total Doctors" value={stats?.totalDoctors || 0} color={Colors.primary} bg={Colors.primaryBg} />
+        <StatCard icon="person-add" label="Total Patients" value={stats?.totalPatients || 0} color={Colors.secondary} bg={Colors.secondaryBg} />
+        <StatCard icon="calendar" label="Today" value={stats?.todayAppointments || 0} color={Colors.accent} bg={Colors.accentBg} />
+      </View>
+      <View style={styles.statsGrid}>
+        <StatCard icon="time" label="Pending" value={stats?.pendingAppointments || 0} color={Colors.warning} bg={Colors.warningBg} />
+        <StatCard icon="checkmark-circle" label="Confirmed" value={stats?.confirmedAppointments || 0} color={Colors.primary} bg={Colors.primaryBg} />
+        <StatCard icon="checkmark-done" label="Completed" value={stats?.completedAppointments || 0} color={Colors.success} bg={Colors.successBg} />
+      </View>
+
+      <Card style={styles.quickActions}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setViewMode('doctors')}>
+            <View style={[styles.actionIcon, { backgroundColor: Colors.primaryBg }]}>
+              <Ionicons name="people" size={22} color={Colors.primary} />
+            </View>
+            <Text style={styles.actionLabel}>Manage Doctors</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => { resetForm(); setViewMode('addDoctor') }}>
+            <View style={[styles.actionIcon, { backgroundColor: Colors.successBg }]}>
+              <Ionicons name="person-add" size={22} color={Colors.success} />
+            </View>
+            <Text style={styles.actionLabel}>Add Doctor</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+    </>
+  )
+
+  const renderDoctorList = () => (
+    <>
+      <View style={styles.viewHeader}>
+        <TouchableOpacity onPress={() => { setViewMode('dashboard'); setSearchQuery('') }}>
+          <Text style={styles.backLink}>← Back to Dashboard</Text>
+        </TouchableOpacity>
+      </View>
+      <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder="Search by name, specialization, hospital..." />
+      <SectionHeader title={`Doctors (${filteredDoctors.length})`} action={{ label: '+ Add', onPress: () => { resetForm(); setViewMode('addDoctor') }}} />
+      {filteredDoctors.map((d) => (
+        <Card key={d.uid} style={styles.doctorCard}>
+          <View style={styles.docRow}>
+            <Avatar name={d.fullName} size="md" />
+            <View style={styles.docInfo}>
+              <Text style={styles.docName}>Dr. {d.fullName}</Text>
+              <Text style={styles.docSpec}>{d.specialization}</Text>
+              <Text style={styles.docDetail}>{d.hospital} • {d.email}</Text>
+            </View>
+            <View style={[styles.statusDot, { backgroundColor: d.accountStatus === 'active' ? Colors.success : Colors.textMuted }]} />
+          </View>
+          <View style={styles.docActions}>
+            <TouchableOpacity style={styles.docActionBtn} onPress={() => openEditDoctor(d)}>
+              <Ionicons name="create-outline" size={16} color={Colors.primary} />
+              <Text style={styles.docActionText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.docActionBtn} onPress={() => handleToggleStatus(d)}>
+              <Ionicons name={d.accountStatus === 'active' ? 'pause-circle-outline' : 'checkmark-circle-outline'} size={16} color={d.accountStatus === 'active' ? Colors.warning : Colors.success} />
+              <Text style={[styles.docActionText, { color: d.accountStatus === 'active' ? Colors.warning : Colors.success }]}>
+                {d.accountStatus === 'active' ? 'Deactivate' : 'Activate'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+      ))}
+      {filteredDoctors.length === 0 && !searchQuery && (
+        <EmptyState icon="medical-outline" title="No Doctors Yet" message="Add your first doctor to get started" actionLabel="Add Doctor" onAction={() => { resetForm(); setViewMode('addDoctor') }} />
+      )}
+    </>
+  )
+
+  const renderDoctorForm = () => (
+    <>
+      <View style={styles.viewHeader}>
+        <TouchableOpacity onPress={() => { resetForm(); setViewMode('doctors') }}>
+          <Text style={styles.backLink}>← Back to Doctors</Text>
+        </TouchableOpacity>
+      </View>
+      <Card>
+        <View style={styles.formHeader}>
+          <Ionicons name={editingDoctor ? 'create-outline' : 'person-add'} size={22} color={Colors.primary} />
+          <Text style={styles.sectionTitle}>{editingDoctor ? 'Edit Doctor' : 'Add New Doctor'}</Text>
+        </View>
+        <Input label="Full Name" icon="person-outline" value={form.fullName} onChangeText={(v) => setForm((p) => ({ ...p, fullName: v }))} placeholder="Dr. John Smith" />
+        {!editingDoctor && (
+          <>
+            <Input label="Email" icon="mail-outline" value={form.email} onChangeText={(v) => setForm((p) => ({ ...p, email: v }))} placeholder="doctor@hospital.com" autoCapitalize="none" keyboardType="email-address" />
+            <Input label="Password" icon="lock-closed-outline" value={form.password} onChangeText={(v) => setForm((p) => ({ ...p, password: v }))} placeholder="Temporary password" isPassword />
+          </>
+        )}
+        <Input label="Phone" icon="call-outline" value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} placeholder="+1 234 567 890" keyboardType="phone-pad" />
+        <Input label="Gender" icon="male-female-outline" value={form.gender} onChangeText={(v) => setForm((p) => ({ ...p, gender: v }))} placeholder="Male / Female / Other" />
+        <Input label="Specialization" icon="medical-outline" value={form.specialization} onChangeText={(v) => setForm((p) => ({ ...p, specialization: v }))} placeholder="e.g. Cardiologist" />
+        <Input label="Hospital" icon="home-outline" value={form.hospital} onChangeText={(v) => setForm((p) => ({ ...p, hospital: v }))} placeholder="Hospital name" />
+        <Input label="Experience (years)" icon="time-outline" value={form.experience} onChangeText={(v) => setForm((p) => ({ ...p, experience: v }))} placeholder="10" keyboardType="numeric" />
+        <Input label="Qualification" icon="school-outline" value={form.qualification} onChangeText={(v) => setForm((p) => ({ ...p, qualification: v }))} placeholder="MD, MBBS, etc." />
+        <View style={styles.formActions}>
+          <Button title={editingDoctor ? 'Update Doctor' : 'Register Doctor'} onPress={handleSubmitDoctor} loading={submitting} />
+          <Button title="Cancel" onPress={() => { resetForm(); setViewMode('doctors') }} variant="ghost" />
+        </View>
+      </Card>
+    </>
+  )
 
   return (
     <Container>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Header
-          title={user?.fullName || 'Administrator'}
-          subtitle="Admin Dashboard"
-          rightAction={{ icon: 'log-out-outline', onPress: handleLogout, color: Colors.danger }}
-        />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Header title="Admin Panel" subtitle={user?.fullName} rightAction={{ icon: 'log-out-outline', onPress: handleLogout, color: Colors.danger }} />
 
-        <Card style={styles.statsCard}>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{doctors.length}</Text>
-              <Text style={styles.statLabel}>Registered Doctors</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Appointments</Text>
-            </View>
-          </View>
-        </Card>
-
-        <View style={styles.sectionHeader}>
-          <SectionHeader title="Doctor Management" count={doctors.length} />
-          <Button
-            title={showForm ? 'Cancel' : 'Add Doctor'}
-            onPress={() => setShowForm(!showForm)}
-            variant={showForm ? 'ghost' : 'primary'}
-            fullWidth={false}
-            style={styles.addButton}
-          />
-        </View>
-
-        {showForm && (
-          <Card style={styles.formCard}>
-            <View style={styles.formHeader}>
-              <Ionicons name="person-add" size={22} color={Colors.primary} />
-              <Text style={styles.formTitle}>Register New Doctor</Text>
-            </View>
-
-            <Input
-              label="Full Name"
-              icon="person-outline"
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Dr. John Smith"
-            />
-
-            <Input
-              label="Speciality"
-              icon="medical-outline"
-              value={speciality}
-              onChangeText={setSpeciality}
-              placeholder="e.g. Cardiologist"
-            />
-
-            <View style={styles.inlineFields}>
-              <View style={styles.halfField}>
-                <Input
-                  label="Age"
-                  icon="calendar-outline"
-                  value={age}
-                  onChangeText={setAge}
-                  placeholder="35"
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.halfField}>
-                <Input
-                  label="Email"
-                  icon="mail-outline"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="doctor@clinic.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
-            </View>
-
-            <Input
-              label="Initial Password"
-              icon="lock-closed-outline"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Temporary password"
-              isPassword
-            />
-
-            <View style={styles.formActions}>
-              <Button title="Register Doctor" onPress={handleAddDoctor} loading={adding} style={styles.formButton} />
-              <Button title="Cancel" onPress={resetForm} variant="ghost" style={styles.formButton} />
-            </View>
-          </Card>
-        )}
-
-        {loading ? (
-          <LoadingScreen message="Loading doctors..." />
-        ) : doctors.length === 0 ? (
-          <EmptyState
-            icon="people-outline"
-            title="No Doctors Registered"
-            message="Add your first doctor to get started"
-            actionLabel="Add Doctor"
-            onAction={() => setShowForm(true)}
-          />
+        {!stats && doctors.length === 0 ? (
+          <>
+            <SkeletonStatRow />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : viewMode === 'dashboard' ? (
+          renderDashboard()
+        ) : viewMode === 'doctors' ? (
+          renderDoctorList()
         ) : (
-          doctors.map((item) => (
-            <View key={item.id} style={styles.doctorCard}>
-              <Avatar name={item.fullName} size="md" />
-              <View style={styles.docInfo}>
-                <Text style={styles.docName}>Dr. {item.fullName}</Text>
-                <Text style={styles.docSpec}>{item.speciality}</Text>
-                <Text style={styles.docDetail}>{item.email} • {item.age} yrs</Text>
-              </View>
-              <View style={styles.docStatus}>
-                <View style={styles.activeDot} />
-                <Text style={styles.activeText}>Active</Text>
-              </View>
-            </View>
-          ))
+          renderDoctorForm()
         )}
 
-        <View style={styles.bottomSpacer} />
+        <View style={{ height: Spacing.xxl }} />
       </ScrollView>
+
+      <ConfirmDialog
+        visible={confirmAction.visible}
+        title={confirmAction.title}
+        message={confirmAction.message}
+        onConfirm={confirmAction.onConfirm}
+        onCancel={() => setConfirmAction((p) => ({ ...p, visible: false }))}
+        variant={confirmAction.title.includes('Deactivate') ? 'danger' : 'primary'}
+      />
     </Container>
   )
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    paddingBottom: Spacing.xxl,
-  },
-  statsCard: {
-    marginBottom: Spacing.lg,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: Colors.border,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  addButton: {
-    width: 'auto',
-    paddingHorizontal: Spacing.md,
-    minHeight: 40,
-  },
-  formCard: {
-    marginBottom: Spacing.md,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  formTitle: {
-    ...Typography.h4,
-    color: Colors.text,
-  },
-  inlineFields: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  halfField: {
-    flex: 1,
-  },
-  formActions: {
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  formButton: {
-    marginTop: 0,
-  },
-  doctorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-    ...Shadows.sm,
-  },
-  docInfo: {
-    flex: 1,
-    marginLeft: Spacing.md,
-  },
-  docName: {
-    ...Typography.body,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  docSpec: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  docDetail: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  docStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.success,
-  },
-  activeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.success,
-  },
-  bottomSpacer: {
-    height: Spacing.xxl,
-  },
+  scroll: { paddingBottom: Spacing.xxl },
+  statsGrid: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+  sectionTitle: { ...Typography.h4, color: Colors.text },
+  quickActions: { marginBottom: Spacing.lg },
+  actionRow: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.md },
+  actionBtn: { flex: 1, alignItems: 'center', gap: Spacing.sm },
+  actionIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  actionLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
+  viewHeader: { marginBottom: Spacing.md },
+  backLink: { fontSize: 15, fontWeight: '600', color: Colors.primary },
+  doctorCard: { marginBottom: Spacing.sm },
+  docRow: { flexDirection: 'row', alignItems: 'center' },
+  docInfo: { flex: 1, marginLeft: Spacing.md },
+  docName: { ...Typography.body, fontWeight: '600', color: Colors.text },
+  docSpec: { fontSize: 13, fontWeight: '600', color: Colors.primary, marginTop: 2 },
+  docDetail: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  docActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.md, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight },
+  docActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  docActionText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  formHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
+  formActions: { gap: Spacing.sm, marginTop: Spacing.sm },
 })
