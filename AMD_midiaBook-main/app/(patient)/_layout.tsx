@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { View, StyleSheet } from 'react-native'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
@@ -11,6 +11,7 @@ import ProfileScreen from './profile'
 type TabKey = 'home' | 'doctors' | 'appointments' | 'profile'
 
 export default function PatientLayout() {
+  useEffect(() => { console.log('[RENDER] PatientLayout from app/(patient)/_layout.tsx') }, [])
   const { user } = useAuth()
   const { colors } = useTheme()
   const [activeTab, setActiveTab] = useState<TabKey>('home')

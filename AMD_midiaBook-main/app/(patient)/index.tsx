@@ -22,6 +22,7 @@ export default function HomeScreen({ onNavigate }: Props) {
   const { user } = useAuth()
   const { colors } = useTheme()
   const [doctors, setDoctors] = useState<DoctorProfile[]>([])
+  useEffect(() => { console.log('[RENDER] HomeScreen from app/(patient)/index.tsx') }, [])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorProfile | null>(null)
